@@ -20,10 +20,10 @@ class FairyStackConnectTest(unittest.TestCase):
         source = SCRIPT.read_text()
         self.assertLess(source.index("# Call tree"), source.index("import argparse"))
         self.assertIn('os.execvp("ssh", ...)\n\nimport argparse', source)
-        for operation in ("setup(path)", "read_enrollment(path)", "verified_key(value)", "open_tunnel(name)"):
+        for operation in ("setup(path)", "read_connection_details(path)", "verified_key(value)", "open_tunnel(name)"):
             self.assertIn(operation, source)
 
-    def enrollment(self, root, fingerprint=FINGERPRINT):
+    def connection_details(self, root, fingerprint=FINGERPRINT):
         key = root / "customer-key"
         key.write_text("not a real private key")
         value = {
@@ -31,14 +31,14 @@ class FairyStackConnectTest(unittest.TestCase):
             "identity_file": str(key), "host_key": PUBLIC_KEY,
             "host_key_fingerprint": fingerprint, "local_port": 19150,
         }
-        path = root / "enrollment.json"
+        path = root / "connection.json"
         path.write_text(json.dumps(value))
         return path, key
 
-    def run_setup(self, home, enrollment, check=True):
+    def run_setup(self, home, connection_details, check=True):
         env = {**os.environ, "HOME": str(home)}
         return subprocess.run(
-            ["python3", str(SCRIPT), "setup", str(enrollment)], env=env,
+            ["python3", str(SCRIPT), "setup", str(connection_details)], env=env,
             capture_output=True, text=True, timeout=5, check=check,
         )
 
@@ -48,9 +48,9 @@ class FairyStackConnectTest(unittest.TestCase):
             ssh = root / ".ssh"
             ssh.mkdir()
             (ssh / "config").write_text("Host existing\n  HostName example.test\n")
-            enrollment, key = self.enrollment(root)
-            self.run_setup(root, enrollment)
-            self.run_setup(root, enrollment)
+            connection_details, key = self.connection_details(root)
+            self.run_setup(root, connection_details)
+            self.run_setup(root, connection_details)
             main = (ssh / "config").read_text()
             profile = (ssh / "fairystack" / "config").read_text()
             self.assertIn("Host existing", main)
@@ -67,8 +67,8 @@ class FairyStackConnectTest(unittest.TestCase):
     def test_fingerprint_mismatch_fails_without_installing_profile(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            enrollment, _ = self.enrollment(root, "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-            result = self.run_setup(root, enrollment, check=False)
+            connection_details, _ = self.connection_details(root, "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+            result = self.run_setup(root, connection_details, check=False)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("fingerprint mismatch", result.stderr)
             self.assertFalse((root / ".ssh" / "fairystack" / "config").exists())
@@ -76,11 +76,11 @@ class FairyStackConnectTest(unittest.TestCase):
     def test_ssh_config_injection_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            enrollment, _ = self.enrollment(root)
-            value = json.loads(enrollment.read_text())
+            connection_details, _ = self.connection_details(root)
+            value = json.loads(connection_details.read_text())
             value["host"] = "example.test\n  ProxyCommand danger"
-            enrollment.write_text(json.dumps(value))
-            result = self.run_setup(root, enrollment, check=False)
+            connection_details.write_text(json.dumps(value))
+            result = self.run_setup(root, connection_details, check=False)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("invalid host", result.stderr)
             self.assertFalse((root / ".ssh" / "fairystack" / "config").exists())

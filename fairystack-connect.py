@@ -3,10 +3,10 @@
 
 # Call tree
 # ├─ setup(path)
-# │  ├─ read_enrollment(path)
+# │  ├─ read_connection_details(path)
 # │  ├─ verified_key(value)
-# │  └─ write(...) → known_hosts, tunnel config, enrollment, ~/.ssh/config
-# └─ open_tunnel(name) → read_enrollment(...) → os.execvp("ssh", ...)
+# │  └─ write(...) → known_hosts, tunnel config, connection details, ~/.ssh/config
+# └─ open_tunnel(name) → read_connection_details(...) → os.execvp("ssh", ...)
 
 import argparse
 import json
@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-# Allow only single-line SSH-safe values so enrollment data cannot add configuration directives.
+# Allow only single-line SSH-safe values so connection data cannot add configuration directives.
 SAFE = re.compile(r"^[A-Za-z0-9_.-]+$")
 HOST = re.compile(r"^[A-Za-z0-9.-]+$")
 SSH = Path.home() / ".ssh"
@@ -28,7 +28,7 @@ def fail(message):
     raise SystemExit(f"FairyStack setup failed: {message}")
 
 
-def read_enrollment(path):
+def read_connection_details(path):
     try:
         value = json.loads(path.read_text())
         required = {"name", "host", "ssh_user", "identity_file", "host_key", "host_key_fingerprint"}
@@ -46,7 +46,7 @@ def read_enrollment(path):
             fail("invalid local port")
         return value
     except (OSError, json.JSONDecodeError, TypeError, ValueError) as error:
-        fail(f"invalid enrollment: {error}")
+        fail(f"invalid connection details: {error}")
 
 
 def write(path, text):
@@ -79,7 +79,7 @@ def verified_key(value):
 
 
 def setup(path):
-    value = read_enrollment(path)
+    value = read_connection_details(path)
     identity = Path(os.path.expanduser(value["identity_file"])).resolve()
     if not identity.is_file():
         fail(f"private key not found: {identity}")
@@ -98,7 +98,7 @@ def setup(path):
     if value.get("jump_host"):
         lines.append(f'  ProxyJump {value["jump_host"]}')
     write(DIR / "config", "\n".join(lines) + "\n")
-    write(DIR / "enrollment.json", json.dumps(value, indent=2, sort_keys=True) + "\n")
+    write(DIR / "connection.json", json.dumps(value, indent=2, sort_keys=True) + "\n")
 
     current = (SSH / "config").read_text() if (SSH / "config").exists() else ""
     body = "\n".join(line for line in current.splitlines() if line.strip() != INCLUDE).lstrip("\n")
@@ -107,9 +107,9 @@ def setup(path):
 
 
 def open_tunnel(name):
-    value = read_enrollment(DIR / "enrollment.json")
+    value = read_connection_details(DIR / "connection.json")
     if value["name"] != name:
-        fail(f'enrollment is for {value["name"]}, not {name}')
+        fail(f'connection details are for {value["name"]}, not {name}')
     os.execvp("ssh", ["ssh", f"fairystack-{name}-tunnel"])
 
 
