@@ -13,6 +13,9 @@ FINGERPRINT = "SHA256:FJlAi3c2knEL+N+Lvdw3ucsAur4T5WaniH875k68bME"
 
 
 class FairyStackConnectTest(unittest.TestCase):
+    def test_connector_stays_small_enough_to_review(self):
+        self.assertLessEqual(len(SCRIPT.read_text().splitlines()), 120)
+
     def enrollment(self, root, fingerprint=FINGERPRINT):
         key = root / "customer-key"
         key.write_text("not a real private key")
@@ -61,6 +64,18 @@ class FairyStackConnectTest(unittest.TestCase):
             result = self.run_setup(root, enrollment, check=False)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("fingerprint mismatch", result.stderr)
+            self.assertFalse((root / ".ssh" / "fairystack" / "config").exists())
+
+    def test_ssh_config_injection_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            enrollment, _ = self.enrollment(root)
+            value = json.loads(enrollment.read_text())
+            value["host"] = "example.test\n  ProxyCommand danger"
+            enrollment.write_text(json.dumps(value))
+            result = self.run_setup(root, enrollment, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("invalid host", result.stderr)
             self.assertFalse((root / ".ssh" / "fairystack" / "config").exists())
 
 
