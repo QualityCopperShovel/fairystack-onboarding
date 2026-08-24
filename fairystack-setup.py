@@ -84,11 +84,18 @@ def setup(connection_file):
 
     # This profile can only forward the FairyStack port; it does not open a shell.
     lines = [
-        f'Host fairystack-{value["name"]}-tunnel', f'  HostName {value["host"]}',
-        f'  User {value["ssh_user"]}', f"  IdentityFile {identity}", "  IdentitiesOnly yes",
-        "  StrictHostKeyChecking yes", f"  UserKnownHostsFile {DIR / 'known_hosts'}",
-        "  ExitOnForwardFailure yes", "  ConnectTimeout 10", "  ServerAliveInterval 30",
-        "  ServerAliveCountMax 3", f'  LocalForward {value["local_port"]} 127.0.0.1:9150',
+        f'Host fairystack-{value["name"]}-tunnel',
+        f'  HostName {value["host"]}',
+        f'  User {value["ssh_user"]}',
+        f"  IdentityFile {identity}",
+        "  IdentitiesOnly yes",
+        "  StrictHostKeyChecking yes",
+        f"  UserKnownHostsFile {DIR / 'known_hosts'}",
+        "  ExitOnForwardFailure yes",
+        "  ConnectTimeout 10",
+        "  ServerAliveInterval 30",
+        "  ServerAliveCountMax 3",
+        f'  LocalForward {value["local_port"]} 127.0.0.1:9150',
         "  SessionType none",
     ]
     if value.get("jump_host"):
