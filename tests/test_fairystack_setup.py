@@ -25,7 +25,7 @@ class FairyStackConnectTest(unittest.TestCase):
         self.assertNotIn("verify_server_identity", source)
         self.assertIn('You download it from your private setup link to /tmp', source)
         self.assertIn('saves only the SSH config and pinned server key', source)
-        self.assertIn('setup verifies it once', source)
+        self.assertIn('setup verifies it, then saves', source)
         self.assertNotIn('~/.ssh/fairystack/connection.json', source)
         self.assertIn('Pin the exact public key delivered through the private setup link.', source)
 
