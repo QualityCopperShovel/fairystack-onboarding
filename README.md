@@ -6,7 +6,7 @@ running it.
 
 ## Files
 
-- [`fairystack-connect.py`](fairystack-connect.py) is the canonical connector.
+- [`fairystack-setup.py`](fairystack-setup.py) is the canonical setup script.
   It verifies the issued server identity, writes an isolated SSH profile, opens
   the local connection, and reports failures with bounded timeouts.
 - [`fairystack-workspace.example.json`](fairystack-workspace.example.json)
@@ -20,7 +20,7 @@ tokens, prompts, application data, or FairyStack server source code.
 
 ```bash
 python3 -m unittest discover -s tests
-python3 fairystack-connect.py --help
+python3 fairystack-setup.py --help
 ```
 
 The live onboarding guide links directly to the connector's canonical raw file

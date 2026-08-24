@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "fairystack-connect.py"
+SCRIPT = ROOT / "fairystack-setup.py"
 PUBLIC_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICekrrR1aZN4Zq8P26X6d6CloRqFgG5S4LnLVPbSX4lr"
 FINGERPRINT = "SHA256:FJlAi3c2knEL+N+Lvdw3ucsAur4T5WaniH875k68bME"
 
@@ -20,9 +20,9 @@ class FairyStackConnectTest(unittest.TestCase):
     def test_connector_starts_with_a_call_tree(self):
         source = SCRIPT.read_text()
         self.assertLess(source.index("# Call tree"), source.index("import argparse"))
-        self.assertIn('os.execvp("ssh", ...)\n\nimport argparse', source)
-        for operation in ("setup(connection_file)", "read_connection_details(connection_file)", "verify_server_identity(value)", "open_tunnel(name)"):
+        for operation in ("setup(connection_file)", "read_connection_details(connection_file)", "verify_server_identity(value)"):
             self.assertIn(operation, source)
+        self.assertNotIn("open_tunnel", source)
         self.assertIn('private setup link downloads it temporarily to /tmp', source)
         self.assertIn('saves only the SSH config and pinned server key', source)
         self.assertNotIn('~/.ssh/fairystack/connection.json', source)
@@ -42,7 +42,7 @@ class FairyStackConnectTest(unittest.TestCase):
     def run_setup(self, home, connection_details, check=True):
         env = {**os.environ, "HOME": str(home)}
         return subprocess.run(
-            ["python3", str(SCRIPT), "setup", str(connection_details)], env=env,
+            ["python3", str(SCRIPT), str(connection_details)], env=env,
             capture_output=True, text=True, timeout=5, check=check,
         )
 
@@ -53,7 +53,7 @@ class FairyStackConnectTest(unittest.TestCase):
             ssh.mkdir()
             (ssh / "config").write_text("Host existing\n  HostName example.test\n")
             connection_details, key = self.connection_details(root)
-            self.run_setup(root, connection_details)
+            first = self.run_setup(root, connection_details)
             self.run_setup(root, connection_details)
             main = (ssh / "config").read_text()
             profile = (ssh / "fairystack" / "config").read_text()
@@ -68,6 +68,7 @@ class FairyStackConnectTest(unittest.TestCase):
             self.assertIn("StrictHostKeyChecking yes", profile)
             self.assertEqual(key.stat().st_mode & 0o777, 0o600)
             self.assertFalse((ssh / "fairystack" / "connection.json").exists())
+            self.assertIn("ssh fairystack-acme-tunnel", first.stdout)
 
     def test_fingerprint_mismatch_fails_without_installing_profile(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -77,22 +78,6 @@ class FairyStackConnectTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("fingerprint mismatch", result.stderr)
             self.assertFalse((root / ".ssh" / "fairystack" / "config").exists())
-
-    def test_open_uses_the_saved_ssh_profile_without_connection_details(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            bin_dir = root / "bin"
-            bin_dir.mkdir()
-            ssh = bin_dir / "ssh"
-            ssh.write_text('#!/bin/sh\nprintf "%s" "$1"\n')
-            ssh.chmod(0o700)
-            result = subprocess.run(
-                ["python3", str(SCRIPT), "open", "acme"],
-                env={**os.environ, "HOME": str(root), "PATH": f"{bin_dir}:{os.environ['PATH']}"},
-                capture_output=True, text=True, timeout=5, check=True,
-            )
-            self.assertEqual(result.stdout, "fairystack-acme-tunnel")
-            self.assertFalse((root / ".ssh" / "fairystack" / "connection.json").exists())
 
     def test_ssh_config_injection_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

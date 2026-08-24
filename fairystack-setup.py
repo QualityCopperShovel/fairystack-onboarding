@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Install or open a private FairyStack SSH tunnel."""
+"""Set up a private FairyStack SSH tunnel."""
 
 # Call tree
 # ├─ setup(connection_file)
 # │  ├─ read_connection_details(connection_file)
 # │  ├─ verify_server_identity(value)
 # │  └─ write(...) → known_hosts, tunnel config, ~/.ssh/config
-# └─ open_tunnel(name) → os.execvp("ssh", ...)
 
 import argparse
 import json
@@ -96,15 +95,10 @@ def setup(connection_file):
     current = (SSH / "config").read_text() if (SSH / "config").exists() else ""
     body = "\n".join(line for line in current.splitlines() if line.strip() != INCLUDE).lstrip("\n")
     write(SSH / "config", INCLUDE + "\n" + body + ("\n" if body else ""))
-    print(f'Configured FairyStack. Run: {Path(__file__).name} open {value["name"]}')
-
-
-def open_tunnel(name):
-    os.execvp("ssh", ["ssh", f"fairystack-{name}-tunnel"])
+    print(f'Configured FairyStack. Open it with: ssh fairystack-{value["name"]}-tunnel')
 
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("command", choices=("setup", "open"))
-parser.add_argument("value")
+parser.add_argument("connection_file", type=Path)
 args = parser.parse_args()
-setup(Path(args.value)) if args.command == "setup" else open_tunnel(args.value)
+setup(args.connection_file)
