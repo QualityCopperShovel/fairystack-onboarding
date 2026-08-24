@@ -9,7 +9,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "fairystack-setup.py"
 PUBLIC_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICekrrR1aZN4Zq8P26X6d6CloRqFgG5S4LnLVPbSX4lr"
-FINGERPRINT = "SHA256:FJlAi3c2knEL+N+Lvdw3ucsAur4T5WaniH875k68bME"
 
 
 class FairyStackConnectTest(unittest.TestCase):
@@ -21,23 +20,21 @@ class FairyStackConnectTest(unittest.TestCase):
     def test_connector_starts_with_a_call_tree(self):
         source = SCRIPT.read_text()
         self.assertLess(source.index("# Call tree"), source.index("import argparse"))
-        for operation in ("setup(connection_file)", "read_connection_details(connection_file)", "verify_server_identity(value)"):
+        for operation in ("setup(connection_file)", "read_connection_details(connection_file)"):
             self.assertIn(operation, source)
-        self.assertNotIn("open_tunnel", source)
+        self.assertNotIn("verify_server_identity", source)
         self.assertIn('You download it from your private setup link to /tmp', source)
         self.assertIn('saves only the SSH config and pinned server key', source)
         self.assertNotIn('~/.ssh/fairystack/connection.json', source)
-        self.assertIn('reads this public key and prints its SHA-256 identity code', source)
-        self.assertIn('Every SSH server has a public key.', source)
-        self.assertNotIn('The address says where the server is', source)
+        self.assertIn('Pin the exact public key delivered through the private setup link.', source)
 
-    def connection_details(self, root, fingerprint=FINGERPRINT):
+    def connection_details(self, root):
         key = root / "customer-key"
         key.write_text("not a real private key")
         value = {
             "name": "acme", "host": "203.0.113.10", "ssh_user": "tunnel_acme",
             "identity_file": str(key), "host_key": PUBLIC_KEY,
-            "host_key_fingerprint": fingerprint, "local_port": 19150,
+            "local_port": 19150,
         }
         path = root / "connection.json"
         path.write_text(json.dumps(value))
@@ -61,6 +58,7 @@ class FairyStackConnectTest(unittest.TestCase):
             self.run_setup(root, connection_details)
             main = (ssh / "config").read_text()
             profile = (ssh / "fairystack" / "config").read_text()
+            known_hosts = (ssh / "fairystack" / "known_hosts").read_text()
             self.assertIn("Host existing", main)
             self.assertEqual(main.count("Include ~/.ssh/fairystack/config"), 1)
             self.assertTrue(main.startswith("Include ~/.ssh/fairystack/config\n"))
@@ -70,17 +68,21 @@ class FairyStackConnectTest(unittest.TestCase):
             self.assertIn("LocalForward 19150 127.0.0.1:9150", profile)
             self.assertIn("SessionType none", profile)
             self.assertIn("StrictHostKeyChecking yes", profile)
+            self.assertEqual(known_hosts, f"203.0.113.10 {PUBLIC_KEY}\n")
             self.assertEqual(key.stat().st_mode & 0o777, 0o600)
             self.assertFalse((ssh / "fairystack" / "connection.json").exists())
             self.assertIn("ssh fairystack-acme-tunnel", first.stdout)
 
-    def test_fingerprint_mismatch_fails_without_installing_profile(self):
+    def test_invalid_host_key_fails_without_installing_profile(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            connection_details, _ = self.connection_details(root, "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+            connection_details, _ = self.connection_details(root)
+            value = json.loads(connection_details.read_text())
+            value["host_key"] = "not-a-public-key"
+            connection_details.write_text(json.dumps(value))
             result = self.run_setup(root, connection_details, check=False)
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("fingerprint mismatch", result.stderr)
+            self.assertIn("invalid SSH host key", result.stderr)
             self.assertFalse((root / ".ssh" / "fairystack" / "config").exists())
 
     def test_ssh_config_injection_is_rejected(self):

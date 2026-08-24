@@ -4,6 +4,5 @@
   "ssh_user": "tunnel_customer",
   "identity_file": "~/.ssh/fairystack-customer",
   "host_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICekrrR1aZN4Zq8P26X6d6CloRqFgG5S4LnLVPbSX4lr",
-  "host_key_fingerprint": "SHA256:FJlAi3c2knEL+N+Lvdw3ucsAur4T5WaniH875k68bME",
   "local_port": 19150
 }

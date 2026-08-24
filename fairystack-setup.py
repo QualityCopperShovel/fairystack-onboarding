@@ -4,14 +4,12 @@
 # Call tree
 # ├─ setup(connection_file)
 # │  ├─ read_connection_details(connection_file)
-# │  ├─ verify_server_identity(value)
 # │  └─ write(...) → known_hosts, tunnel config, ~/.ssh/config
 
 import argparse
 import json
 import os
 import re
-import subprocess
 import tempfile
 from pathlib import Path
 
@@ -27,7 +25,7 @@ INCLUDE = "Include ~/.ssh/fairystack/config"
 def read_connection_details(connection_file):
     try:
         value = json.loads(connection_file.read_text())
-        required = {"name", "host", "ssh_user", "identity_file", "host_key", "host_key_fingerprint"}
+        required = {"name", "host", "ssh_user", "identity_file", "host_key"}
         missing = required - value.keys()
         if missing:
             raise SystemExit("FairyStack setup failed: missing " + ", ".join(sorted(missing)))
@@ -37,6 +35,10 @@ def read_connection_details(connection_file):
             raise SystemExit("FairyStack setup failed: invalid host")
         if value.get("jump_host") and not SAFE.fullmatch(str(value["jump_host"])):
             raise SystemExit("FairyStack setup failed: invalid jump host")
+        key_fields = str(value["host_key"]).split()
+        if len(key_fields) < 2 or key_fields[0] not in {"ssh-ed25519", "ecdsa-sha2-nistp256", "ssh-rsa"}:
+            raise SystemExit("FairyStack setup failed: invalid SSH host key")
+        value["host_key"] = " ".join(key_fields[:2])
         value["local_port"] = int(value.get("local_port", 19150))
         if not 1024 <= value["local_port"] <= 65535:
             raise SystemExit("FairyStack setup failed: invalid local port")
@@ -52,36 +54,14 @@ def write(path, text):
     os.chmod(temporary, 0o600)
     os.replace(temporary, path)
 
-# Every SSH server has a public key. Confirm that this key produces the expected SHA-256 identity code.
-def verify_server_identity(value):
-    fields = str(value["host_key"]).split()
-    if len(fields) < 2 or fields[0] not in {"ssh-ed25519", "ecdsa-sha2-nistp256", "ssh-rsa"}:
-        raise SystemExit("FairyStack setup failed: invalid SSH host key")
-    with tempfile.NamedTemporaryFile("w") as key_file:
-        key_file.write(f"host {fields[0]} {fields[1]}\n")
-        key_file.flush()
-        try:
-            # Despite its name, ssh-keygen -l only reads this public key and prints its SHA-256 identity code.
-            # It creates nothing and makes no network connection.
-            result = subprocess.run(
-                ["ssh-keygen", "-lf", key_file.name, "-E", "sha256"],
-                check=True, capture_output=True, text=True, timeout=5,
-            )
-        except (OSError, subprocess.SubprocessError) as error:
-            raise SystemExit(f"FairyStack setup failed: cannot verify SSH host key: {error}")
-    fingerprint = next((word for word in result.stdout.split() if word.startswith("SHA256:")), "")
-    if fingerprint != value["host_key_fingerprint"]:
-        raise SystemExit("FairyStack setup failed: SSH host-key fingerprint mismatch")
-    return " ".join(fields[:2])
-
-
 def setup(connection_file):
     value = read_connection_details(connection_file)
     identity = Path(os.path.expanduser(value["identity_file"])).resolve()
     if not identity.is_file():
         raise SystemExit(f"FairyStack setup failed: private key not found: {identity}")
     identity.chmod(0o600)
-    write(DIR / "known_hosts", f'{value["host"]} {verify_server_identity(value)}\n')
+    # Pin the exact public key delivered through the private setup link.
+    write(DIR / "known_hosts", f'{value["host"]} {value["host_key"]}\n')
 
     # This profile can only forward the FairyStack port; it does not open a shell.
     lines = [
