@@ -5,8 +5,8 @@
 # ├─ setup(connection_file)
 # │  ├─ read_connection_details(connection_file)
 # │  ├─ verify_server_identity(value)
-# │  └─ write(...) → known_hosts, tunnel config, connection details, ~/.ssh/config
-# └─ open_tunnel(name) → read_connection_details(...) → os.execvp("ssh", ...)
+# │  └─ write(...) → known_hosts, tunnel config, ~/.ssh/config
+# └─ open_tunnel(name) → os.execvp("ssh", ...)
 
 import argparse
 import json
@@ -23,8 +23,8 @@ SSH = Path.home() / ".ssh"
 DIR = SSH / "fairystack"
 INCLUDE = "Include ~/.ssh/fairystack/config"
 
-# FairyStack creates this file; your private setup link downloads it to /tmp.
-# setup saves a checked copy in ~/.ssh/fairystack/connection.json; open reads that copy.
+# FairyStack creates this file; your private setup link downloads it temporarily to /tmp.
+# setup checks it once, then saves only the SSH config and pinned server key.
 def read_connection_details(connection_file):
     try:
         value = json.loads(connection_file.read_text())
@@ -93,8 +93,6 @@ def setup(connection_file):
     if value.get("jump_host"):
         lines.append(f'  ProxyJump {value["jump_host"]}')
     write(DIR / "config", "\n".join(lines) + "\n")
-    write(DIR / "connection.json", json.dumps(value, indent=2, sort_keys=True) + "\n")
-
     current = (SSH / "config").read_text() if (SSH / "config").exists() else ""
     body = "\n".join(line for line in current.splitlines() if line.strip() != INCLUDE).lstrip("\n")
     write(SSH / "config", INCLUDE + "\n" + body + ("\n" if body else ""))
@@ -102,9 +100,6 @@ def setup(connection_file):
 
 
 def open_tunnel(name):
-    value = read_connection_details(DIR / "connection.json")
-    if value["name"] != name:
-        raise SystemExit(f'FairyStack setup failed: connection details are for {value["name"]}, not {name}')
     os.execvp("ssh", ["ssh", f"fairystack-{name}-tunnel"])
 
 

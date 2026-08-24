@@ -23,9 +23,9 @@ class FairyStackConnectTest(unittest.TestCase):
         self.assertIn('os.execvp("ssh", ...)\n\nimport argparse', source)
         for operation in ("setup(connection_file)", "read_connection_details(connection_file)", "verify_server_identity(value)", "open_tunnel(name)"):
             self.assertIn(operation, source)
-        self.assertIn('private setup link downloads it to /tmp', source)
-        self.assertIn('~/.ssh/fairystack/connection.json', source)
-        self.assertIn('open reads that copy.\ndef read_connection_details(connection_file):', source)
+        self.assertIn('private setup link downloads it temporarily to /tmp', source)
+        self.assertIn('saves only the SSH config and pinned server key', source)
+        self.assertNotIn('~/.ssh/fairystack/connection.json', source)
 
     def connection_details(self, root, fingerprint=FINGERPRINT):
         key = root / "customer-key"
@@ -67,6 +67,7 @@ class FairyStackConnectTest(unittest.TestCase):
             self.assertIn("SessionType none", profile)
             self.assertIn("StrictHostKeyChecking yes", profile)
             self.assertEqual(key.stat().st_mode & 0o777, 0o600)
+            self.assertFalse((ssh / "fairystack" / "connection.json").exists())
 
     def test_fingerprint_mismatch_fails_without_installing_profile(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -76,6 +77,22 @@ class FairyStackConnectTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("fingerprint mismatch", result.stderr)
             self.assertFalse((root / ".ssh" / "fairystack" / "config").exists())
+
+    def test_open_uses_the_saved_ssh_profile_without_connection_details(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            ssh = bin_dir / "ssh"
+            ssh.write_text('#!/bin/sh\nprintf "%s" "$1"\n')
+            ssh.chmod(0o700)
+            result = subprocess.run(
+                ["python3", str(SCRIPT), "open", "acme"],
+                env={**os.environ, "HOME": str(root), "PATH": f"{bin_dir}:{os.environ['PATH']}"},
+                capture_output=True, text=True, timeout=5, check=True,
+            )
+            self.assertEqual(result.stdout, "fairystack-acme-tunnel")
+            self.assertFalse((root / ".ssh" / "fairystack" / "connection.json").exists())
 
     def test_ssh_config_injection_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
