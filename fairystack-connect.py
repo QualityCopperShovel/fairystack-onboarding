@@ -129,27 +129,16 @@ def setup(enrollment_path: Path) -> None:
     # changing or relying on the user's general SSH trust database.
     atomic_write(KNOWN_HOSTS_PATH, f"{host_key_name} {public_key}\n")
 
-    # The base alias is useful for diagnostics. Every network operation has a
-    # connection deadline and strict key checking; no interactive trust prompt
-    # can silently accept a different machine.
+    # Generate only a tunnel alias: the onboarding client never creates a
+    # convenient shell-capable profile. The server independently enforces the
+    # same restriction, so bypassing this local file cannot grant shell access.
     lines = [
-        f"Host {alias}", f"  HostName {host}", f"  User {value['ssh_user']}",
-        f"  IdentityFile {identity}", "  IdentitiesOnly yes", "  StrictHostKeyChecking yes",
-        f"  UserKnownHostsFile {KNOWN_HOSTS_PATH}", "  ExitOnForwardFailure yes",
-        "  ConnectTimeout 10", "  ServerAliveInterval 30", "  ServerAliveCountMax 3",
-    ]
-    if value.get("jump_host"):
-        lines.append(f"  ProxyJump {value['jump_host']}")
-
-    # The tunnel alias does not open a remote shell. It exposes FairyStack only
-    # on this computer's loopback address and fails if forwarding cannot start.
-    lines.extend([
-        "", f"Host {alias}-tunnel", f"  HostName {host}", f"  User {value['ssh_user']}",
+        f"Host {alias}-tunnel", f"  HostName {host}", f"  User {value['ssh_user']}",
         f"  IdentityFile {identity}", "  IdentitiesOnly yes", "  StrictHostKeyChecking yes",
         f"  UserKnownHostsFile {KNOWN_HOSTS_PATH}", "  ExitOnForwardFailure yes",
         "  ConnectTimeout 10", "  ServerAliveInterval 30", "  ServerAliveCountMax 3",
         f"  LocalForward {value['local_port']} 127.0.0.1:9150", "  SessionType none",
-    ])
+    ]
     if value.get("jump_host"):
         lines.append(f"  ProxyJump {value['jump_host']}")
     atomic_write(CONFIG_PATH, "\n".join(lines) + "\n")

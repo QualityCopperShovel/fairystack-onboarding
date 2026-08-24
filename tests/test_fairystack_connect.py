@@ -47,7 +47,10 @@ class FairyStackConnectTest(unittest.TestCase):
             self.assertEqual(main.count("Include ~/.ssh/fairystack/config"), 1)
             self.assertTrue(main.startswith("Include ~/.ssh/fairystack/config\n"))
             self.assertIn("Host fairystack-acme-tunnel", profile)
+            self.assertNotIn("Host fairystack-acme\n", profile)
+            self.assertEqual(profile.count("Host "), 1)
             self.assertIn("LocalForward 19150 127.0.0.1:9150", profile)
+            self.assertIn("SessionType none", profile)
             self.assertIn("StrictHostKeyChecking yes", profile)
             self.assertEqual(key.stat().st_mode & 0o777, 0o600)
 
