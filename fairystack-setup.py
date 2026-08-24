@@ -22,7 +22,7 @@ SSH = Path.home() / ".ssh"
 DIR = SSH / "fairystack"
 INCLUDE = "Include ~/.ssh/fairystack/config"
 
-# FairyStack creates this file; your private setup link downloads it temporarily to /tmp.
+# FairyStack creates this file. You download it from your private setup link to /tmp.
 # setup checks it once, then saves only the SSH config and pinned server key.
 def read_connection_details(connection_file):
     try:

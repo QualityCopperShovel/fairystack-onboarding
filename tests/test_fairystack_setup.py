@@ -24,7 +24,7 @@ class FairyStackConnectTest(unittest.TestCase):
         for operation in ("setup(connection_file)", "read_connection_details(connection_file)", "verify_server_identity(value)"):
             self.assertIn(operation, source)
         self.assertNotIn("open_tunnel", source)
-        self.assertIn('private setup link downloads it temporarily to /tmp', source)
+        self.assertIn('You download it from your private setup link to /tmp', source)
         self.assertIn('saves only the SSH config and pinned server key', source)
         self.assertNotIn('~/.ssh/fairystack/connection.json', source)
         self.assertIn('reads this public key and prints its SHA-256 identity code', source)
