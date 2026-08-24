@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """Install or open a private FairyStack SSH tunnel."""
 
+# Call tree
+# ├─ setup(path)
+# │  ├─ read_enrollment(path)
+# │  ├─ verified_key(value)
+# │  └─ write(...) → known_hosts, tunnel config, enrollment, ~/.ssh/config
+# └─ open_tunnel(name) → read_enrollment(...) → os.execvp("ssh", ...)
 import argparse
 import json
 import os

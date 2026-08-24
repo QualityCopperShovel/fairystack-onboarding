@@ -16,6 +16,12 @@ class FairyStackConnectTest(unittest.TestCase):
     def test_connector_stays_small_enough_to_review(self):
         self.assertLessEqual(len(SCRIPT.read_text().splitlines()), 120)
 
+    def test_connector_starts_with_a_call_tree(self):
+        source = SCRIPT.read_text()
+        self.assertLess(source.index("# Call tree"), source.index("import argparse"))
+        for operation in ("setup(path)", "read_enrollment(path)", "verified_key(value)", "open_tunnel(name)"):
+            self.assertIn(operation, source)
+
     def enrollment(self, root, fingerprint=FINGERPRINT):
         key = root / "customer-key"
         key.write_text("not a real private key")
