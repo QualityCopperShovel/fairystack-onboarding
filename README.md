@@ -23,12 +23,12 @@ python3 -m unittest discover -s tests
 python3 fairystack-connect.py --help
 ```
 
-The live onboarding guide links directly to the raw file at a pinned public
-location. User-specific enrollment details remain on the onboarding service.
+The live onboarding guide links directly to the connector's canonical raw file
+in this repository. User-specific enrollment details remain on the onboarding
+service.
 
 ## Security
 
 The connector requires strict host-key verification and accepts only a bounded
 set of enrollment fields. Do not put private keys or passwords in an enrollment
 file or commit real customer enrollment files to this repository.
-
