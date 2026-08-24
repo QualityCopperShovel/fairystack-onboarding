@@ -2,8 +2,6 @@
 """Install or open a private FairyStack SSH tunnel."""
 
 # Call tree
-# Connection file: FairyStack creates it; your private setup link downloads it to /tmp.
-# setup saves a checked copy in ~/.ssh/fairystack/connection.json; open reads that copy.
 # ├─ setup(connection_file)
 # │  ├─ read_connection_details(connection_file)
 # │  ├─ verify_server_identity(value)
@@ -30,6 +28,8 @@ def fail(message):
     raise SystemExit(f"FairyStack setup failed: {message}")
 
 
+# FairyStack creates this file; your private setup link downloads it to /tmp.
+# setup saves a checked copy in ~/.ssh/fairystack/connection.json; open reads that copy.
 def read_connection_details(connection_file):
     try:
         value = json.loads(connection_file.read_text())

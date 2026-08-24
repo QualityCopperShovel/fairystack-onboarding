@@ -24,6 +24,7 @@ class FairyStackConnectTest(unittest.TestCase):
             self.assertIn(operation, source)
         self.assertIn('private setup link downloads it to /tmp', source)
         self.assertIn('~/.ssh/fairystack/connection.json', source)
+        self.assertIn('open reads that copy.\ndef read_connection_details(connection_file):', source)
 
     def connection_details(self, root, fingerprint=FINGERPRINT):
         key = root / "customer-key"
