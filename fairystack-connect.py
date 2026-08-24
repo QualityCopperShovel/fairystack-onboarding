@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 
+# Allow only single-line SSH-safe values so enrollment data cannot add configuration directives.
 SAFE = re.compile(r"^[A-Za-z0-9_.-]+$")
 HOST = re.compile(r"^[A-Za-z0-9.-]+$")
 SSH = Path.home() / ".ssh"
