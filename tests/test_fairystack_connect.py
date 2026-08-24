@@ -15,6 +15,7 @@ FINGERPRINT = "SHA256:FJlAi3c2knEL+N+Lvdw3ucsAur4T5WaniH875k68bME"
 class FairyStackConnectTest(unittest.TestCase):
     def test_connector_stays_small_enough_to_review(self):
         self.assertLessEqual(len(SCRIPT.read_text().splitlines()), 120)
+        self.assertNotIn("def fail(", SCRIPT.read_text())
 
     def test_connector_starts_with_a_call_tree(self):
         source = SCRIPT.read_text()

@@ -23,11 +23,6 @@ SSH = Path.home() / ".ssh"
 DIR = SSH / "fairystack"
 INCLUDE = "Include ~/.ssh/fairystack/config"
 
-
-def fail(message):
-    raise SystemExit(f"FairyStack setup failed: {message}")
-
-
 # FairyStack creates this file; your private setup link downloads it to /tmp.
 # setup saves a checked copy in ~/.ssh/fairystack/connection.json; open reads that copy.
 def read_connection_details(connection_file):
@@ -36,19 +31,19 @@ def read_connection_details(connection_file):
         required = {"name", "host", "ssh_user", "identity_file", "host_key", "host_key_fingerprint"}
         missing = required - value.keys()
         if missing:
-            fail("missing " + ", ".join(sorted(missing)))
+            raise SystemExit("FairyStack setup failed: missing " + ", ".join(sorted(missing)))
         if not SAFE.fullmatch(str(value["name"])) or not SAFE.fullmatch(str(value["ssh_user"])):
-            fail("invalid name or SSH user")
+            raise SystemExit("FairyStack setup failed: invalid name or SSH user")
         if not HOST.fullmatch(str(value["host"])):
-            fail("invalid host")
+            raise SystemExit("FairyStack setup failed: invalid host")
         if value.get("jump_host") and not SAFE.fullmatch(str(value["jump_host"])):
-            fail("invalid jump host")
+            raise SystemExit("FairyStack setup failed: invalid jump host")
         value["local_port"] = int(value.get("local_port", 19150))
         if not 1024 <= value["local_port"] <= 65535:
-            fail("invalid local port")
+            raise SystemExit("FairyStack setup failed: invalid local port")
         return value
     except (OSError, json.JSONDecodeError, TypeError, ValueError) as error:
-        fail(f"invalid connection details: {error}")
+        raise SystemExit(f"FairyStack setup failed: invalid connection details: {error}")
 
 def write(path, text):
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -61,7 +56,7 @@ def write(path, text):
 def verify_server_identity(value):
     fields = str(value["host_key"]).split()
     if len(fields) < 2 or fields[0] not in {"ssh-ed25519", "ecdsa-sha2-nistp256", "ssh-rsa"}:
-        fail("invalid SSH host key")
+        raise SystemExit("FairyStack setup failed: invalid SSH host key")
     with tempfile.NamedTemporaryFile("w") as key_file:
         key_file.write(f"host {fields[0]} {fields[1]}\n")
         key_file.flush()
@@ -71,10 +66,10 @@ def verify_server_identity(value):
                 check=True, capture_output=True, text=True, timeout=5,
             )
         except (OSError, subprocess.SubprocessError) as error:
-            fail(f"cannot verify SSH host key: {error}")
+            raise SystemExit(f"FairyStack setup failed: cannot verify SSH host key: {error}")
     fingerprint = next((word for word in result.stdout.split() if word.startswith("SHA256:")), "")
     if fingerprint != value["host_key_fingerprint"]:
-        fail("SSH host-key fingerprint mismatch")
+        raise SystemExit("FairyStack setup failed: SSH host-key fingerprint mismatch")
     return " ".join(fields[:2])
 
 
@@ -82,7 +77,7 @@ def setup(connection_file):
     value = read_connection_details(connection_file)
     identity = Path(os.path.expanduser(value["identity_file"])).resolve()
     if not identity.is_file():
-        fail(f"private key not found: {identity}")
+        raise SystemExit(f"FairyStack setup failed: private key not found: {identity}")
     identity.chmod(0o600)
     write(DIR / "known_hosts", f'{value["host"]} {verify_server_identity(value)}\n')
 
@@ -109,7 +104,7 @@ def setup(connection_file):
 def open_tunnel(name):
     value = read_connection_details(DIR / "connection.json")
     if value["name"] != name:
-        fail(f'connection details are for {value["name"]}, not {name}')
+        raise SystemExit(f'FairyStack setup failed: connection details are for {value["name"]}, not {name}')
     os.execvp("ssh", ["ssh", f"fairystack-{name}-tunnel"])
 
 
