@@ -60,7 +60,8 @@ def verify_server_identity(value):
         key_file.write(f"host {fields[0]} {fields[1]}\n")
         key_file.flush()
         try:
-            # Despite its name, ssh-keygen -l only fingerprints this public key; it creates nothing and makes no network connection.
+            # Despite its name, ssh-keygen -l only reads this public key and prints its SHA-256 identity code.
+            # It creates nothing and makes no network connection.
             result = subprocess.run(
                 ["ssh-keygen", "-lf", key_file.name, "-E", "sha256"],
                 check=True, capture_output=True, text=True, timeout=5,
