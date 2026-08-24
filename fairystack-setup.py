@@ -52,8 +52,7 @@ def write(path, text):
     os.chmod(temporary, 0o600)
     os.replace(temporary, path)
 
-# The address says where the server is; its public SSH key says which server it is.
-# Check that key's expected identity code before pinning the key to the address.
+# Every SSH server has a public key. Confirm that this key produces the expected SHA-256 identity code.
 def verify_server_identity(value):
     fields = str(value["host_key"]).split()
     if len(fields) < 2 or fields[0] not in {"ssh-ed25519", "ecdsa-sha2-nistp256", "ssh-rsa"}:
