@@ -2,8 +2,10 @@
 """Install or open a private FairyStack SSH tunnel."""
 
 # Call tree
-# ├─ setup(path)
-# │  ├─ read_connection_details(path)
+# Connection file: FairyStack creates it; your private setup link downloads it to /tmp.
+# setup saves a checked copy in ~/.ssh/fairystack/connection.json; open reads that copy.
+# ├─ setup(connection_file)
+# │  ├─ read_connection_details(connection_file)
 # │  ├─ verify_server_identity(value)
 # │  └─ write(...) → known_hosts, tunnel config, connection details, ~/.ssh/config
 # └─ open_tunnel(name) → read_connection_details(...) → os.execvp("ssh", ...)
@@ -28,9 +30,9 @@ def fail(message):
     raise SystemExit(f"FairyStack setup failed: {message}")
 
 
-def read_connection_details(path):
+def read_connection_details(connection_file):
     try:
-        value = json.loads(path.read_text())
+        value = json.loads(connection_file.read_text())
         required = {"name", "host", "ssh_user", "identity_file", "host_key", "host_key_fingerprint"}
         missing = required - value.keys()
         if missing:
@@ -48,7 +50,6 @@ def read_connection_details(path):
     except (OSError, json.JSONDecodeError, TypeError, ValueError) as error:
         fail(f"invalid connection details: {error}")
 
-
 def write(path, text):
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", dir=path.parent, delete=False) as handle:
@@ -56,7 +57,6 @@ def write(path, text):
         temporary = handle.name
     os.chmod(temporary, 0o600)
     os.replace(temporary, path)
-
 
 def verify_server_identity(value):
     fields = str(value["host_key"]).split()
@@ -78,8 +78,8 @@ def verify_server_identity(value):
     return " ".join(fields[:2])
 
 
-def setup(path):
-    value = read_connection_details(path)
+def setup(connection_file):
+    value = read_connection_details(connection_file)
     identity = Path(os.path.expanduser(value["identity_file"])).resolve()
     if not identity.is_file():
         fail(f"private key not found: {identity}")

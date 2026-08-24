@@ -20,8 +20,10 @@ class FairyStackConnectTest(unittest.TestCase):
         source = SCRIPT.read_text()
         self.assertLess(source.index("# Call tree"), source.index("import argparse"))
         self.assertIn('os.execvp("ssh", ...)\n\nimport argparse', source)
-        for operation in ("setup(path)", "read_connection_details(path)", "verify_server_identity(value)", "open_tunnel(name)"):
+        for operation in ("setup(connection_file)", "read_connection_details(connection_file)", "verify_server_identity(value)", "open_tunnel(name)"):
             self.assertIn(operation, source)
+        self.assertIn('private setup link downloads it to /tmp', source)
+        self.assertIn('~/.ssh/fairystack/connection.json', source)
 
     def connection_details(self, root, fingerprint=FINGERPRINT):
         key = root / "customer-key"
