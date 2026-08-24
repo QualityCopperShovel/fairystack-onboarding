@@ -17,9 +17,14 @@ import urllib.request
 from pathlib import Path
 
 
+# Enrollment values are interpolated into SSH configuration, so accept only
+# simple names rather than trying to escape arbitrary user-supplied text.
 SAFE_NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
 SAFE_HOST = re.compile(r"^[A-Za-z0-9.-]+$")
 FINGERPRINT = re.compile(r"^SHA256:[A-Za-z0-9+/]+={0,2}$")
+
+# Keep everything FairyStack adds in its own directory. The one-line Include
+# below lets the user's existing ~/.ssh/config remain otherwise untouched.
 SSH_DIR = Path.home() / ".ssh"
 INSTALL_DIR = SSH_DIR / "fairystack"
 CONFIG_PATH = INSTALL_DIR / "config"
@@ -33,6 +38,7 @@ def fail(message: str) -> None:
 
 
 def load_enrollment(path: Path) -> dict:
+    """Load and strictly validate the non-secret connection description."""
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -60,6 +66,7 @@ def load_enrollment(path: Path) -> dict:
 
 
 def atomic_write(path: Path, text: str, mode: int = 0o600) -> None:
+    """Replace a file completely so an interruption cannot leave half a config."""
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     descriptor, temp_name = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
     try:
@@ -73,6 +80,7 @@ def atomic_write(path: Path, text: str, mode: int = 0o600) -> None:
 
 
 def verify_host_key(host_key: str, expected: str) -> str:
+    """Prove the supplied server key matches the separately issued fingerprint."""
     fields = host_key.strip().split()
     if len(fields) < 2 or fields[0] not in {"ssh-ed25519", "ecdsa-sha2-nistp256", "ssh-rsa"}:
         fail("host_key is not a supported SSH public key")
@@ -103,7 +111,11 @@ def ensure_main_include() -> None:
 
 
 def setup(enrollment_path: Path) -> None:
+    """Install the verified host identity and two isolated SSH aliases."""
     value = load_enrollment(enrollment_path)
+
+    # The private key is delivered separately from this public repository. SSH
+    # refuses keys with loose permissions, so normalize it before first use.
     identity = Path(os.path.expanduser(str(value["identity_file"]))).resolve()
     if not identity.is_file():
         fail(f"SSH private key does not exist: {identity}")
@@ -112,7 +124,14 @@ def setup(enrollment_path: Path) -> None:
     host = str(value["host"])
     alias = "fairystack-" + str(value["name"])
     host_key_name = f"[{host}]:22" if ":" in host else host
+
+    # Use a dedicated known-hosts file. This pins the issued server key without
+    # changing or relying on the user's general SSH trust database.
     atomic_write(KNOWN_HOSTS_PATH, f"{host_key_name} {public_key}\n")
+
+    # The base alias is useful for diagnostics. Every network operation has a
+    # connection deadline and strict key checking; no interactive trust prompt
+    # can silently accept a different machine.
     lines = [
         f"Host {alias}", f"  HostName {host}", f"  User {value['ssh_user']}",
         f"  IdentityFile {identity}", "  IdentitiesOnly yes", "  StrictHostKeyChecking yes",
@@ -121,6 +140,9 @@ def setup(enrollment_path: Path) -> None:
     ]
     if value.get("jump_host"):
         lines.append(f"  ProxyJump {value['jump_host']}")
+
+    # The tunnel alias does not open a remote shell. It exposes FairyStack only
+    # on this computer's loopback address and fails if forwarding cannot start.
     lines.extend([
         "", f"Host {alias}-tunnel", f"  HostName {host}", f"  User {value['ssh_user']}",
         f"  IdentityFile {identity}", "  IdentitiesOnly yes", "  StrictHostKeyChecking yes",
@@ -131,12 +153,16 @@ def setup(enrollment_path: Path) -> None:
     if value.get("jump_host"):
         lines.append(f"  ProxyJump {value['jump_host']}")
     atomic_write(CONFIG_PATH, "\n".join(lines) + "\n")
+
+    # Save the validated values so future `open` calls do not need to download
+    # the enrollment again. This file contains routing details, not credentials.
     atomic_write(INSTALL_DIR / "enrollment.json", json.dumps(value, indent=2, sort_keys=True) + "\n")
     ensure_main_include()
     print(f"Configured {alias}. Run: {Path(__file__).name} open {value['name']}")
 
 
 def port_available(port: int) -> bool:
+    """Check whether the requested local tunnel address can be claimed."""
     probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         probe.bind(("127.0.0.1", port))
@@ -148,6 +174,7 @@ def port_available(port: int) -> bool:
 
 
 def open_tunnel(name: str) -> None:
+    """Start SSH, verify FairyStack becomes reachable, and supervise the tunnel."""
     enrollment_path = INSTALL_DIR / "enrollment.json"
     value = load_enrollment(enrollment_path)
     if value["name"] != name:
@@ -156,6 +183,8 @@ def open_tunnel(name: str) -> None:
     if not port_available(port):
         fail(f"localhost:{port} is already in use; close the existing tunnel and retry")
     alias = "fairystack-" + name + "-tunnel"
+    # SSH reads every security and forwarding option from the generated alias.
+    # Keep stderr so a failed connection can be reported in plain language.
     process = subprocess.Popen(["ssh", alias], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
 
     def stop(_signum=None, _frame=None):
@@ -164,6 +193,9 @@ def open_tunnel(name: str) -> None:
 
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
+    # Do not declare success merely because the SSH process is alive. Probe the
+    # service through the new local tunnel, with both per-request and overall
+    # deadlines, before telling the user where to open the interface.
     deadline = time.monotonic() + 15
     url = f"http://127.0.0.1:{port}/api/version"
     while time.monotonic() < deadline and process.poll() is None:
