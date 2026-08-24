@@ -4,7 +4,7 @@
 # Call tree
 # ├─ setup(path)
 # │  ├─ read_connection_details(path)
-# │  ├─ verified_key(value)
+# │  ├─ verify_server_identity(value)
 # │  └─ write(...) → known_hosts, tunnel config, connection details, ~/.ssh/config
 # └─ open_tunnel(name) → read_connection_details(...) → os.execvp("ssh", ...)
 
@@ -58,7 +58,7 @@ def write(path, text):
     os.replace(temporary, path)
 
 
-def verified_key(value):
+def verify_server_identity(value):
     fields = str(value["host_key"]).split()
     if len(fields) < 2 or fields[0] not in {"ssh-ed25519", "ecdsa-sha2-nistp256", "ssh-rsa"}:
         fail("invalid SSH host key")
@@ -84,7 +84,7 @@ def setup(path):
     if not identity.is_file():
         fail(f"private key not found: {identity}")
     identity.chmod(0o600)
-    write(DIR / "known_hosts", f'{value["host"]} {verified_key(value)}\n')
+    write(DIR / "known_hosts", f'{value["host"]} {verify_server_identity(value)}\n')
 
     # This profile can only forward the FairyStack port; it does not open a shell.
     lines = [
