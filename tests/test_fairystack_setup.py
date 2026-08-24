@@ -26,6 +26,7 @@ class FairyStackConnectTest(unittest.TestCase):
         self.assertIn('private setup link downloads it temporarily to /tmp', source)
         self.assertIn('saves only the SSH config and pinned server key', source)
         self.assertNotIn('~/.ssh/fairystack/connection.json', source)
+        self.assertIn('ssh-keygen -l only fingerprints this public key', source)
 
     def connection_details(self, root, fingerprint=FINGERPRINT):
         key = root / "customer-key"
