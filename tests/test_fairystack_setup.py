@@ -28,6 +28,7 @@ class FairyStackConnectTest(unittest.TestCase):
         self.assertIn('saves only the SSH config and pinned server key', source)
         self.assertNotIn('~/.ssh/fairystack/connection.json', source)
         self.assertIn('reads this public key and prints its SHA-256 identity code', source)
+        self.assertIn('The address says where the server is; its public SSH key says which server it is.', source)
 
     def connection_details(self, root, fingerprint=FINGERPRINT):
         key = root / "customer-key"
