@@ -1,0 +1,65 @@
+import json
+import os
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = ROOT / "fairystack-connect.py"
+PUBLIC_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICekrrR1aZN4Zq8P26X6d6CloRqFgG5S4LnLVPbSX4lr"
+FINGERPRINT = "SHA256:FJlAi3c2knEL+N+Lvdw3ucsAur4T5WaniH875k68bME"
+
+
+class FairyStackConnectTest(unittest.TestCase):
+    def enrollment(self, root, fingerprint=FINGERPRINT):
+        key = root / "customer-key"
+        key.write_text("not a real private key")
+        value = {
+            "name": "acme", "host": "203.0.113.10", "ssh_user": "tunnel_acme",
+            "identity_file": str(key), "host_key": PUBLIC_KEY,
+            "host_key_fingerprint": fingerprint, "local_port": 19150,
+        }
+        path = root / "enrollment.json"
+        path.write_text(json.dumps(value))
+        return path, key
+
+    def run_setup(self, home, enrollment, check=True):
+        env = {**os.environ, "HOME": str(home)}
+        return subprocess.run(
+            ["python3", str(SCRIPT), "setup", str(enrollment)], env=env,
+            capture_output=True, text=True, timeout=5, check=check,
+        )
+
+    def test_setup_preserves_ssh_config_and_installs_verified_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ssh = root / ".ssh"
+            ssh.mkdir()
+            (ssh / "config").write_text("Host existing\n  HostName example.test\n")
+            enrollment, key = self.enrollment(root)
+            self.run_setup(root, enrollment)
+            self.run_setup(root, enrollment)
+            main = (ssh / "config").read_text()
+            profile = (ssh / "fairystack" / "config").read_text()
+            self.assertIn("Host existing", main)
+            self.assertEqual(main.count("Include ~/.ssh/fairystack/config"), 1)
+            self.assertTrue(main.startswith("Include ~/.ssh/fairystack/config\n"))
+            self.assertIn("Host fairystack-acme-tunnel", profile)
+            self.assertIn("LocalForward 19150 127.0.0.1:9150", profile)
+            self.assertIn("StrictHostKeyChecking yes", profile)
+            self.assertEqual(key.stat().st_mode & 0o777, 0o600)
+
+    def test_fingerprint_mismatch_fails_without_installing_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            enrollment, _ = self.enrollment(root, "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+            result = self.run_setup(root, enrollment, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("fingerprint mismatch", result.stderr)
+            self.assertFalse((root / ".ssh" / "fairystack" / "config").exists())
+
+
+if __name__ == "__main__":
+    unittest.main()
