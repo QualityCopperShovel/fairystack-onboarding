@@ -19,6 +19,7 @@ class FairyStackConnectTest(unittest.TestCase):
     def test_connector_starts_with_a_call_tree(self):
         source = SCRIPT.read_text()
         self.assertLess(source.index("# Call tree"), source.index("import argparse"))
+        self.assertIn('os.execvp("ssh", ...)\n\nimport argparse', source)
         for operation in ("setup(path)", "read_enrollment(path)", "verified_key(value)", "open_tunnel(name)"):
             self.assertIn(operation, source)
 

@@ -7,6 +7,7 @@
 # │  ├─ verified_key(value)
 # │  └─ write(...) → known_hosts, tunnel config, enrollment, ~/.ssh/config
 # └─ open_tunnel(name) → read_enrollment(...) → os.execvp("ssh", ...)
+
 import argparse
 import json
 import os
@@ -14,7 +15,6 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
-
 
 # Allow only single-line SSH-safe values so enrollment data cannot add configuration directives.
 SAFE = re.compile(r"^[A-Za-z0-9_.-]+$")
